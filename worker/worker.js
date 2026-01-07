@@ -1,82 +1,71 @@
-import { MongoClient } from "mongodb";
-import dotenv from "dotenv";
-import trackedRoutes from "./routes/trackedRoutes.js";
-import checkRoutes from "./routes/checkRoutes.js";
+import axios from "axios";
+import { connectToDatabase } from "./db.js";
 
+const CHECK_INTERVAL = Number(process.env.CHECK_INTERVAL) || 60000;
 
-dotenv.config();
+async function runChecks() {
+  console.log("Worker: starting check cycle");
 
-const MONGO_URI = process.env.MONGO_URI;
-const DB_NAME = process.env.DB_NAME;
+  try {
+    const db = await connectToDatabase();
+    const urlsCollection = db.collection("urls");
+    const checksCollection = db.collection("checks");
 
-// MongoDB klijent
-const client = new MongoClient(MONGO_URI);
+    const urls = await urlsCollection.find({ isActive: true }).toArray();
 
-/*
-  Helper funkcija – ista logika kao u API-ju,
-  ali bez HTTP sloja
-*/
-async function analyzeUrl(url) {
-  const startTime = Date.now();
-
-  const response = await fetch(url);
-  const body = await response.text();
-
-  return {
-    statusCode: response.status,
-    responseTimeMs: Date.now() - startTime,
-    responseSizeBytes: Buffer.byteLength(body, "utf8"),
-    lastCheckedAt: new Date().toISOString()
-  };
-}
-
-/*
-  Worker se izvršava jednom:
-  - pročita sve tracked URL-ove
-  - provjeri ih
-  - spremi zadnje stanje u bazu
-*/
-async function runOnce() {
-  await client.connect();
-  const db = client.db(DB_NAME);
-  const tracked = db.collection("tracked_sites");
-
-  const sites = await tracked.find({}).toArray();
-  console.log(`Worker: found ${sites.length} tracked site(s).`);
-
-  for (const site of sites) {
-    try {
-      const result = await analyzeUrl(site.url);
-
-      await tracked.updateOne(
-        { _id: site._id },
-        { $set: result }
+    for (const urlDoc of urls) {
+      // 🔎 Provjeri zadnji check za ovaj URL
+      const lastCheck = await checksCollection.findOne(
+        { urlId: urlDoc._id },
+        { sort: { checkedAt: -1 } }
       );
 
-      console.log(
-        `OK  ${site.url} -> ${result.statusCode}, ${result.responseTimeMs}ms`
-      );
-    } catch (err) {
-      // u slučaju greške spremamo "fail stanje"
-      await tracked.updateOne(
-        { _id: site._id },
-        {
-          $set: {
-            lastStatusCode: 0,
-            lastResponseTimeMs: 0,
-            lastResponseSizeBytes: 0,
-            lastCheckedAt: new Date().toISOString(),
-            lastError: err.message
-          }
+      if (lastCheck) {
+        const diff = Date.now() - new Date(lastCheck.checkedAt).getTime();
+        if (diff < CHECK_INTERVAL) {
+          console.log(`⏭ Skipping ${urlDoc.url} (checked recently)`);
+          continue; // ✅ OVDJE je continue DOZVOLJEN
         }
-      );
+      }
 
-      console.log(`ERR ${site.url} -> ${err.message}`);
+      try {
+        const response = await axios.get(urlDoc.url, {
+          timeout: 10000,
+        });
+
+        const html = response.data;
+        const linkCount = (html.match(/<a /g) || []).length;
+
+        await checksCollection.insertOne({
+          urlId: urlDoc._id,
+          statusCode: response.status,
+          htmlSize: html.length,
+          linkCount,
+          checkedAt: new Date(),
+        });
+
+        console.log(`✔ Checked ${urlDoc.url}`);
+      } catch (err) {
+        console.error(`✖ Error checking ${urlDoc.url}:`, err.message);
+
+        await checksCollection.insertOne({
+          urlId: urlDoc._id,
+          statusCode: err.response?.status || 500,
+          htmlSize: 0,
+          linkCount: 0,
+          checkedAt: new Date(),
+        });
+      }
     }
-  }
 
-  await client.close();
+    console.log("Worker: cycle finished");
+  } catch (err) {
+    console.error("Worker fatal error:", err.message);
+  }
 }
 
-// Pokretanje workera (jedan ciklus)
-runOnce();
+// 1️⃣ Pokreni odmah
+runChecks();
+
+// 2️⃣ I ponavljaj periodički
+setInterval(runChecks, CHECK_INTERVAL);
