@@ -1,0 +1,36 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    image: ghcr.io/jt07616/checkhtml-backend:latest
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+
+  worker:
+    image: ghcr.io/jt07616/checkhtml-worker:latest
+    restart: unless-stopped
+    env_file:
+      - ./worker/.env
+    depends_on:
+      - mongo
+      - backend
+
+  frontend:
+    image: ghcr.io/jt07616/checkhtml-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
