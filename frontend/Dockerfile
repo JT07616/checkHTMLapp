@@ -22,8 +22,12 @@ FROM nginx:alpine
 #Kopiraj build u Nginx
 COPY --from=build /app/dist /usr/share/nginx/html
 
+#Kopiraj custom nginx config (proxy + SPA fallback)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 #Izloži port 80
 EXPOSE 80
 
 #Pokreni Nginx
 CMD ["nginx", "-g", "daemon off;"]
+
