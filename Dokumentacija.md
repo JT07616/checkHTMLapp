@@ -1,8 +1,9 @@
-![CheckHTML UI](docs/fipu_hr.png)
----
+## ![CheckHTML UI](docs/fipu_hr.png)
+
 ### Kolegij: Praktikum
 
 ### Autor: Juraj Tojčić, Bruno Rebić
+
 ---
 
 # CheckHTML – URL Monitoring Application
@@ -78,7 +79,7 @@ router.post("/", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-CHECK_INTERVAL=60000
+CHECK_INTERVAL = 60000;
 ```
 
 ## U srži:
@@ -122,7 +123,7 @@ router.get("/:urlId", async (req, res) => {
 - sortira se po `checkedAt` silazno (`-1`)
 - vraća se JSON lista rezultata
 
-  ---
+  ***
 
 ## Worker
 
@@ -146,7 +147,7 @@ async function runChecks() {
     for (const urlDoc of urls) {
       const lastCheck = await checksCollection.findOne(
         { urlId: urlDoc._id },
-        { sort: { checkedAt: -1 } }
+        { sort: { checkedAt: -1 } },
       );
 
       if (lastCheck) {
@@ -198,7 +199,7 @@ setInterval(runChecks, CHECK_INTERVAL);
 
 ## U srži:
 
-- dohvaća aktivne URL-ove iz `urls` 
+- dohvaća aktivne URL-ove iz `urls`
 - provjerava zadnji zapis u `checks` da ne provjerava prečesto
 - radi HTTP GET i računa `statusCode`, `htmlSize`, `linkCount`
 - zapisuje rezultat u `checks` (i greške isto zapisuje)
@@ -216,7 +217,6 @@ MongoDB se pokreće kao Docker servis, a podaci se čuvaju u volume-u (mongo-dat
 
 ---
 
-
 ## Frontend
 
 Frontend je Vue web sučelje koje služi kao “dashboard” za praćenje URL-ova. Korisnik preko njega dodaje URL, vidi listu spremljenih URL-ova i otvara povijest provjera za odabrani URL.  
@@ -232,10 +232,10 @@ Frontend **ne komunicira s bazom direktno** – sve ide preko backend REST API-j
 
 ### Što korisnik radi u sučelju
 
-- doda novi URL za praćenje  
-- vidi listu svih spremljenih URL-ova  
-- klikne URL i dobije tablicu provjera (zadnje provjere prve)  
-- može urediti ili obrisati URL  
+- doda novi URL za praćenje
+- vidi listu svih spremljenih URL-ova
+- klikne URL i dobije tablicu provjera (zadnje provjere prve)
+- može urediti ili obrisati URL
 
 ---
 
@@ -251,6 +251,7 @@ const api = axios.create({
 
 export default api;
 ```
+
 ---
 
 ### Komponente i što točno rade
@@ -272,11 +273,11 @@ export default api;
 ### App.vue: spajanje svega + osvježavanje provjera
 
 `App.vue` drži stanje aplikacije (`urls`, `selectedUrl`, `checks`) i poziva backend:
+
 - `GET /urls` za popis URL-ova
 - `GET /checks/:urlId` za provjere odabranog URL-a
 
 Kad korisnik odabere URL, frontend radi **polling** svakih 10 sekundi (`setInterval(loadChecks, 10000)`) kako bi se u tablici vidjele i nove provjere koje worker upisuje u bazu.
-
 
 ## Docker i Docker compose
 
@@ -301,6 +302,7 @@ COPY . .
 EXPOSE 3000
 CMD ["npm", "start"]
 ```
+
 Ovaj primjer pokazuje tipičan pattern: uzme se baza (Node), instaliraju se dependencyji, kopira kod i definira naredba za pokretanje servisa.
 
 ---
@@ -397,6 +399,7 @@ volumes:
   prometheus-data:
   grafana-data:
 ```
+
 ### Servisi aplikacije
 
 - **backend** (`build: ./backend`)  
@@ -424,13 +427,13 @@ volumes:
 
 ### Volumes (zašto postoje)
 
-- `mongo-data` čuva MongoDB podatke trajno  
-- `prometheus-data` čuva Prometheus metrike  
+- `mongo-data` čuva MongoDB podatke trajno
+- `prometheus-data` čuva Prometheus metrike
 - `grafana-data` čuva Grafana postavke/dashboarde
 
 ---
 
-## Pokretanje
+## Pokretanje (lokalno)
 
 ```bash
 docker compose up --build
@@ -442,7 +445,7 @@ docker compose up --build
 docker compose down
 ```
 
-**Napomena**: ```docker compose down -v``` briše i volumene (podatke), pa oprez.
+**Napomena**: `docker compose down -v` briše i volumene (podatke), pa oprez.
 
 ---
 
@@ -461,7 +464,7 @@ U projektu je dodan monitoring da se može pratiti kako se kontejneri ponašaju 
   Periodički “scrapea” metrike (uzima ih preko HTTP endpointa) i sprema ih u svoju bazu metrika.
 
 - **Grafana**  
-  UI za vizualizaciju. U Grafani se kao *data source* postavi Prometheus i onda se rade dashboardi.
+  UI za vizualizaciju. U Grafani se kao _data source_ postavi Prometheus i onda se rade dashboardi.
 
 > Zašto je cAdvisor tu?  
 > Prometheus sam po sebi ne zna metrike kontejnera. Treba mu “exporter” koji te metrike izlaže. U ovom projektu cAdvisor radi tu ulogu.
@@ -493,30 +496,32 @@ scrape_configs:
     static_configs:
       - targets: ["cadvisor:8080"]
 ```
-- ```scrape_interval: 5s``` znači da Prometheus uzima metrike svakih 5 sekundi
-- targeti koriste Docker hostnames (```prometheus```, ```cadvisor```) jer su svi servisi u istoj Docker mreži
 
-  ---
+- `scrape_interval: 5s` znači da Prometheus uzima metrike svakih 5 sekundi
+- targeti koriste Docker hostnames (`prometheus`, `cadvisor`) jer su svi servisi u istoj Docker mreži
+
+  ***
 
   ## Kako otvoriti i provjeriti monitoring
 
 ### 1) Prometheus
 
-- Otvori: http://localhost:9090  
-- Idi na **Status → Targets**  
+- Otvori: http://localhost:9090
+- Idi na **Status → Targets**
 - Provjeri da su `prometheus` i `cadvisor` u stanju **UP**
 
 ### 2) cAdvisor
 
-- Otvori: http://localhost:8081  
+- Otvori: http://localhost:8081
 - Tu se može vidjeti stanje kontejnera i osnovne metrike po kontejneru
 
 ### 3) Grafana
 
-- Otvori: http://localhost:3001  
+- Otvori: http://localhost:3001
 - Login: `admin` / `admin123`
 
 **Dodavanje Prometheus data source-a:**
+
 - URL (unutar Docker mreže): `http://prometheus:9090`
 
 Nakon toga možeš importati dashboard (ili složiti svoj) za prikaz CPU/memorije/mreže po kontejnerima.
@@ -534,3 +539,193 @@ MongoDB, Prometheus, Grafana i cAdvisor nemaju Dockerfile u repozitoriju jer se 
 
 Konfiguracija se radi kroz `docker-compose.yml` (portovi, env varijable, volume mountovi) i kroz config datoteke (npr. `monitoring/prometheus.yml`).
 
+## CI/CD – Continuous Delivery
+
+U sklopu projekta implementiran je **CI/CD pipeline** s ciljem automatizacije procesa izgradnje aplikacije i njene pripreme za pokretanje u produkcijskom okruženju.  
+Naglasak je stavljen na **Continuous Delivery (CD)**, gdje se svaka promjena koda automatski priprema za deployment, dok se samo pokretanje aplikacije na serveru odvija kontrolirano.
+
+### Što CI/CD znači u ovom projektu?
+
+- **Continuous Integration (CI)**  
+  Svaka promjena koda (push na `main` granu) automatski pokreće CI proces:
+  - izgradnju Docker image-a za svaki servis (`backend`, `worker`, `frontend`)
+  - provjeru da se aplikacija može uspješno zapakirati i pokrenuti u Docker okruženju
+
+- **Continuous Delivery (CD)**  
+  Nakon uspješne izgradnje:
+  - Docker image-i se objavljuju u **GitHub Container Registry (GHCR)**
+  - image-i su odmah spremni za deployment na server
+
+Na ovaj način se osigurava da je svaka verzija aplikacije **uvijek spremna za produkciju**, bez potrebe za ručnim buildanjem na serveru.
+
+---
+
+## GitHub Actions pipeline
+
+CI/CD pipeline je implementiran pomoću **GitHub Actions**.  
+Workflow je definiran u `.github/workflows/` direktoriju i automatski se pokreće prilikom `push`-a na `main` granu.
+
+Pipeline za svaki servis aplikacije (`backend`, `worker`, `frontend`) izvršava sljedeće korake:
+
+1. preuzimanje izvornog koda iz GitHub repozitorija
+2. izgradnju Docker image-a pomoću pripadajućeg Dockerfile-a
+3. označavanje image-a (`latest` i SHA hash commit-a)
+4. objavu image-a u GitHub Container Registry
+
+Primjeri objavljenih image-a:
+
+- `ghcr.io/<username>/checkhtml-backend:latest`
+- `ghcr.io/<username>/checkhtml-worker:latest`
+- `ghcr.io/<username>/checkhtml-frontend:latest`
+
+Ovakav pristup omogućuje verzioniranje image-a i jednostavan rollback na prethodne verzije ako je potrebno.
+
+---
+
+## GitHub Container Registry (GHCR)
+
+GitHub Container Registry koristi se kao centralno spremište Docker image-a.
+
+Prednosti korištenja GHCR-a:
+
+- image-i su direktno vezani uz GitHub repozitorij
+- nema potrebe za dodatnim registry serverom
+- jednostavna autentikacija pomoću GitHub tokena
+- praktično rješenje za CI/CD u DevOps projektima
+
+---
+
+## Deployment na server (AWS EC2)
+
+Aplikacija je deployana na **AWS EC2 virtualni server**, čime je osigurano realno produkcijsko okruženje.
+
+Osnovna ideja deploymenta je da:
+
+- server **ne sadrži izvorni kod aplikacije**
+- server koristi isključivo **gotove Docker image-e** iz GHCR-a
+- build procesa nema na serveru
+
+Na taj način se jasno razdvaja razvoj aplikacije (lokalno + CI) od njenog izvođenja (server).
+
+---
+
+## docker-compose.server.yml
+
+Za produkcijski deployment koristi se zasebna Docker Compose konfiguracija (`docker-compose.server.yml`).
+
+Za razliku od lokalne konfiguracije:
+
+- ne koristi se `build`
+- koriste se `image` reference prema GHCR-u
+
+Primjer (skraćeno):
+
+```yaml
+services:
+  backend:
+    image: ghcr.io/<username>/checkhtml-backend:latest
+    restart: always
+    ports:
+      - "3000:3000"
+
+  worker:
+    image: ghcr.io/<username>/checkhtml-worker:latest
+    restart: always
+
+  frontend:
+    image: ghcr.io/<username>/checkhtml-frontend:latest
+    restart: always
+    ports:
+      - "8080:80"
+```
+
+Ovakav pristup omogućuje brz i pouzdan deployment bez potrebe za buildanjem aplikacije na serveru.
+
+---
+
+## Postupak deploya na server
+
+Na AWS EC2 serveru deployment se provodi sljedećim koracima:
+
+1. Instalacija Dockera i Docker Compose-a
+2. Povlačenje najnovijih image-a i pokretanje aplikacije:
+   ```bash
+   docker compose -f docker-compose.server.yml pull
+   docker compose -f docker-compose.server.yml up -d
+   ```
+
+Ako dođe do nove verzije aplikacije:
+
+- CI pipeline automatski izgradi i objavi nove image-e
+- server povuče nove image-e i restartira kontejnere
+
+Javni URL-ovi aplikacije i monitoringa
+
+Svi servisi koriste istu javnu IP adresu EC2 instance (`EC2_PUBLIC_IP`), to jest 63.179.145.215, ali različite portove.
+
+#### Frontend (Vue + Nginx)
+
+```text
+http://63.179.145.215:8080
+```
+
+---
+
+#### Backend (REST API)
+
+```text
+http://63.179.145.215:3000
+```
+
+---
+
+### Monitoring servisi
+
+#### Prometheus
+
+```text
+http://63.179.145.215:9090
+```
+
+---
+
+#### cAdvisor
+
+```text
+http://63.179.145.215:8081
+```
+
+---
+
+#### Grafana
+
+```text
+http://63.179.145.215:3001
+```
+
+**Default login podaci:**
+
+```text
+Username: admin
+Password: admin123
+```
+
+---
+
+### Sigurnosna napomena
+
+MongoDB servis nije javno izložen i dostupan je isključivo unutar Docker mreže, čime se sprječava izravan pristup bazi izvan servera.
+
+Monitoring portovi su otvoreni radi demonstracije i razvoja; u produkcijskom okruženju pristup bi bio ograničen putem firewall pravila ili autentikacije.
+
+---
+
+## Zašto Continuous Delivery, a ne Continuous Deployment?
+
+U ovom projektu implementiran je **Continuous Delivery**, a ne Continuous Deployment, jer:
+
+- pipeline automatski priprema svaku novu verziju aplikacije
+- deployment na server se pokreće ručno
+- postoji potpuna kontrola nad trenutkom deploya
+
+Ovakav pristup smanjuje rizik i često se koristi u stvarnim DevOps okruženjima.
