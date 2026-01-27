@@ -5,23 +5,76 @@
 ### Autor: Juraj Tojčić, Bruno Rebić
 ---
 
-# CheckHTML – URL Monitoring Application
 
-CheckHTML je web aplikacija za praćenje dostupnosti web stranica. Korisnik unosi URL koji želi pratiti, a aplikacija periodički prikuplja osnovne informacije o svakoj provjeri, poput HTTP statusnog koda, veličine HTML dokumenta i broja poveznica na stranici.
+## CheckHTML
 
-Aplikacija je podijeljena na više komponenti kako bi se jasno razdvojile odgovornosti i pojednostavilo održavanje sustava.
+CheckHTML je web aplikacija za praćenje dostupnosti web stranica kroz vrijeme. Nakon što se kroz sučelje URL doda u sustav, aplikacija automatski radi provjere i sprema rezultate u bazu, pa se osim trenutnog stanja dobije i povijest (korisno kad su problemi povremeni).
 
-## Komponente sustava
+Provjere se rade na dva načina:
+- **inicijalno (instant check)** – odmah nakon dodavanja URL-a backend izvrši prvu provjeru i spremi rezultat
+- **periodički** – worker servis u pozadini u intervalima (CHECK_INTERVAL) provjerava aktivne URL-ove i dodaje nove rezultate
 
-- **Frontend** – web sučelje koje omogućuje unos URL-ova, prikaz liste praćenih URL-ova i pregled rezultata provjera. Frontend komunicira s backendom putem REST API-ja.
-- **Backend** – Node.js (Express) aplikacija koja izlaže REST API za upravljanje URL-ovima i dohvat rezultata provjera. Prilikom dodavanja novog URL-a backend izvršava inicijalnu provjeru i sprema prvi rezultat u bazu.
-- **Worker** – pozadinski servis koji u definiranim vremenskim intervalima provjerava sve aktivne URL-ove i sprema nove rezultate provjera u bazu podataka.
-- **Baza podataka (MongoDB)** – služi za pohranu URL-ova i povijesti njihovih provjera.
-- **Monitoring** – sustav za praćenje rada aplikacije i Docker kontejnera, temeljen na alatima Prometheus, cAdvisor i Grafana.
+Za svaku provjeru spremaju se osnovne metrike:
+- **HTTP status code** (npr. 200, 404, 500)
+- **HTML size** – veličina HTML odgovora (često je brzi signal da se vratio error/maintenance sadržaj)
+- **Link count** – broj `<a>` tagova (indikator promjene sadržaja)
+- **checkedAt** – vrijeme kada je provjera napravljena
 
-Cijeli sustav implementiran je kao skup Docker kontejnera, pri čemu svaka komponenta radi u vlastitom kontejneru. Orkestracija kontejnera provodi se pomoću alata Docker Compose, koji omogućuje jednostavno pokretanje i upravljanje svim dijelovima aplikacije.
+**Zašto je korisno:** ručna provjera daje samo stanje “u tom trenutku”. U praksi stranice znaju povremeno padati ili vraćati greške (deploy, opterećenje, DNS/mreža), a povijest provjera pokazuje kad se problem dogodio i koliko često se ponavlja.
 
-Predviđeno je daljnje proširenje sustava kroz CI/CD pipeline i pokretanje na udaljenom poslužitelju (AWS EC2), kako bi se dobilo realnije produkcijsko okruženje.
+Primjeri gdje pomaže:
+- povremeni padovi (500/timeout)
+- provjera nakon deploya
+- promjena sadržaja (HTML size/link count odskače)
+- praćenje više URL-ova na jednom mjestu
+
+## Komponente sustava 
+
+CheckHTML je organiziran kao višeservisna aplikacija:
+
+- **Frontend (Vue)** – korisničko sučelje za dodavanje URL-ova, prikaz liste i pregled povijesti provjera. Ne pristupa bazi direktno, već komunicira s backendom putem REST API-ja.
+- **Backend (Node.js/Express)** – centralni API servis. Obradom zahtjeva s frontenda upravlja URL-ovima u bazi i izvršava *instant check* prilikom dodavanja novog URL-a.
+- **Worker (Node.js)** – pozadinski servis bez API-ja. U intervalima definiranima varijablom `CHECK_INTERVAL` provjerava aktivne URL-ove i zapisuje rezultate u bazu.
+- **MongoDB** – pohrana podataka (kolekcije `urls` i `checks`) za URL-ove i povijest provjera.
+- **Monitoring (Prometheus + cAdvisor + Grafana)** – prikupljanje i vizualizacija metrika kontejnera i servisa (CPU, memorija, mreža) kroz dashboarde.
+
+**Kontejnerizacija i orkestracija:** Svi servisi se pokreću kao zasebni Docker kontejneri. Orkestracija se radi preko **Docker Compose-a**, što omogućuje jednaku proceduru pokretanja lokalno i na poslužitelju bez dodatne ručne konfiguracije infrastrukture.
+
+**Deploy i CI/CD:** Projekt uključuje **GitHub Actions** workflow za automatizirani deployment. Nakon promjena u repozitoriju, workflow se spaja na **AWS EC2** putem SSH-a te na poslužitelju izvršava ažuriranje i ponovno podizanje servisa (npr. `git pull` + `docker compose up -d --build`). Aplikacija je deployana kao **Docker Compose stack** na **AWS EC2** instanci, čime se dobiva okruženje koje je bliže produkciji i omogućuje stabilan udaljeni pristup sustavu.
+
+### Graf arhitekture sustava
+
+```mermaid
+flowchart TB
+
+%% --- CI/CD ---
+subgraph CICD["CI/CD"]
+  REPO["GitHub Repo"] -->|"push"| GA["GitHub Actions"]
+  GA -->|"SSH deploy: git pull + docker compose up -d"| S
+end
+
+%% --- Server + Docker stack ---
+subgraph S["Server (AWS EC2)
+            Docker Compose stack (app + monitoring)"]
+  direction TB
+
+  subgraph APP["Application services"]
+    direction LR
+    U["User / Browser"] -->|"HTTP 8080"| FE["Frontend (Vue + Nginx)"]
+    FE -->|"REST API"| BE["Backend (Node.js/Express)"]
+    BE -->|"MongoDB"| DB[("MongoDB")]
+    W["Worker (Node.js)"] -->|"MongoDB"| DB
+    BE -->|"HTTP GET (instant check)"| WWW[("Target websites")]
+    W -->|"HTTP GET (periodic checks)"| WWW
+  end
+
+  subgraph MON["Monitoring services"]
+    direction LR
+    CA["cAdvisor"] -->|"metrics"| PR["Prometheus"]
+    PR -->|"data source"| GR["Grafana"]
+  end
+end
+```
 
 ---
 
@@ -81,7 +134,7 @@ router.post("/", async (req, res) => {
 CHECK_INTERVAL=60000
 ```
 
-## U srži:
+### Tok obrade zahtjeva:
 
 - `url` dolazi iz `req.body` (ako nedostaje → 400)
 - URL se sprema u kolekciju `urls` (`insertOne`)
@@ -91,7 +144,7 @@ CHECK_INTERVAL=60000
 
 ---
 
-## Ključna funkcionalnost 2 – Dohvat povijesti provjera za URL
+## 2) Dohvat povijesti provjera za URL
 
 Frontend kad korisnik klikne URL, zove backend da vrati provjere (najnovije prve).
 
@@ -115,20 +168,20 @@ router.get("/:urlId", async (req, res) => {
 });
 ```
 
-## U srži:
+### Tok obrade zahtjeva:
 
 - `urlId` se čita iz `req.params`
 - filtrira se `checks` po `urlId`
 - sortira se po `checkedAt` silazno (`-1`)
 - vraća se JSON lista rezultata
 
-  ---
+
 
 ## Worker
 
-Worker je pozadinski servis (nema REST API). Njegova uloga je da u pravilnim intervalima provjerava URL-ove i upisuje rezultate u bazu, čak i kad korisnik ne koristi frontend.
+Worker je zaseban pozadinski servis koji radi neovisno o korisničkom sučelju i backendu (ne izlaže REST API). Njegov posao je automatski održavati “povijest stanja” za svaki spremljeni URL: u svakom ciklusu dohvaća aktivne URL-ove iz baze, napravi HTTP provjeru i rezultat (statusni kod, veličina HTML-a, broj linkova, vrijeme provjere) upiše u kolekciju checks. Time aplikacija dobiva periodičke zapise i onda se u UI-u vidi kako se stanje URL-a mijenjalo kroz vrijeme, čak i kad korisnik ništa ne radi.
 
-Interval provjera kontrolira varijabla `CHECK_INTERVAL`.
+Učestalost provjera kontrolira varijabla okoline CHECK_INTERVAL (npr. 60000 ms = 60 s), što omogućuje mijenjanje intervala bez izmjene koda — dovoljno je promijeniti .env ili docker-compose.yml.
 
 ```javascript
 const CHECK_INTERVAL = Number(process.env.CHECK_INTERVAL) || 60000;
@@ -196,7 +249,7 @@ runChecks();
 setInterval(runChecks, CHECK_INTERVAL);
 ```
 
-## U srži:
+## Tok provjere (jedan ciklus):
 
 - dohvaća aktivne URL-ove iz `urls` 
 - provjerava zadnji zapis u `checks` da ne provjerava prečesto
@@ -205,14 +258,17 @@ setInterval(runChecks, CHECK_INTERVAL);
 
 ## Database (MongoDB)
 
-MongoDB se koristi za pohranu podataka i dijeli se između backenda i workera.
+MongoDB služi kao centralno spremište podataka za aplikaciju. U njoj se čuva popis URL-ova koje korisnik prati i svi rezultati provjera kroz vrijeme. Backend koristi bazu za upravljanje URL-ovima i dohvat podataka za prikaz u sučelju, dok worker periodički dodaje nove rezultate provjera.
 
-Kolekcije:
+Aplikacija koristi dvije kolekcije:
 
-- urls – URL-ovi koje korisnik prati (`url`, `isActive`, `createdAt`)
-- checks – povijest provjera (`urlId`, `statusCode`, `htmlSize`, `linkCount`, `checkedAt`)
+urls – sadrži URL-ove koje korisnik prati. Osim same adrese (url), tu su i osnovna polja poput isActive (je li URL uključen u provjere) i createdAt (kada je URL dodan).
 
-MongoDB se pokreće kao Docker servis, a podaci se čuvaju u volume-u (mongo-data) da ostanu nakon restarta.
+checks – sadrži povijest provjera. Svaka provjera je zaseban zapis s rezultatima (statusCode, htmlSize, linkCount, checkedAt) i povezana je s URL-om preko urlId (referenca na zapis u kolekciji urls).
+
+Ovakva struktura omogućuje da se za jedan URL jednostavno prikaže kompletna povijest provjera, a istovremeno se baza može rasti “linearno” dodavanjem novih checkova bez mijenjanja URL zapisa. 
+
+MongoDB se pokreće kao Docker servis, a podaci se čuvaju u volume-u (mongo-data)
 
 ---
 
@@ -226,7 +282,7 @@ Frontend **ne komunicira s bazom direktno** – sve ide preko backend REST API-j
 
 ---
 
-![CheckHTML UI](docs/frontend_screenshot.jpg)
+![CheckHTML UI](frontend_screenshot.jpg)
 
 ---
 
@@ -278,15 +334,15 @@ export default api;
 Kad korisnik odabere URL, frontend radi **polling** svakih 10 sekundi (`setInterval(loadChecks, 10000)`) kako bi se u tablici vidjele i nove provjere koje worker upisuje u bazu.
 
 
-## Docker i Docker compose
+## Docker (kontejnerizacija i orkestracija)
 
 Projekt je složen kao više servisa (frontend, backend, worker, baza i monitoring) koji se pokreću u zasebnim Docker kontejnerima. To je praktično u DevOps kontekstu jer se cijeli sustav može podignuti jednako lokalno i na serveru, bez ručnog instaliranja baza i alata.
 
-### Docker (kratko)
+### Pojmovi
 
-- **Dockerfile** je recept kako se gradi image za naš servis.
-- **Docker image** je spakirana aplikacija (kod + runtime + ovisnosti).
-- **Container** je pokrenuti image.
+- **Dockerfile** je “recept” kako se gradi image za naš servis.
+- **Docker image** je zapakirana aplikacija (kod + runtime + ovisnosti).
+- **Container** je pokrenuti image (runtime instanca).
 
 U ovom projektu Dockerfile koristimo za servise koje gradimo iz vlastitog koda (`backend`, `worker`, `frontend`). Za MongoDB i monitoring koristimo gotove službene image-e pa za njih ne trebaju Dockerfile-ovi.
 
@@ -422,7 +478,9 @@ volumes:
 - **grafana** (`image: grafana/grafana`)  
   UI za dashboarde. Spaja se na Prometheus kao data source (unutar docker mreže: `http://prometheus:9090`).
 
-### Volumes (zašto postoje)
+### Volume
+
+Volumes služe za **trajnu pohranu podataka** iz kontejnera. Bez volume-a, podaci bi bili izgubljeni čim se kontejner obriše ili napravi novi (`docker compose down` + novi `up`).
 
 - `mongo-data` čuva MongoDB podatke trajno  
 - `prometheus-data` čuva Prometheus metrike  
@@ -448,23 +506,39 @@ docker compose down
 
 ## Monitoring (Prometheus + cAdvisor + Grafana)
 
-U projektu je dodan monitoring da se može pratiti kako se kontejneri ponašaju tijekom rada (CPU, memorija, mreža) i da se dobije realniji “DevOps” dio sustava. Monitoring stack se diže zajedno s aplikacijom preko `docker-compose.yml`.
+U projektu je dodan monitoring da se može pratiti kako se Docker kontejneri ponašaju tijekom rada (CPU, memorija, mreža) i da se sustav može promatrati “DevOps” načinom, a ne samo kroz to radi li aplikacija ili ne.
+
+Poanta nije samo vidjeti da je servis up, nego i **kako se ponaša pod opterećenjem**:
+- troši li backend previše memorije (mogući memory leak)
+- skače li CPU kod workera kad radi ciklus provjera
+- je li promet (network) veći nego što se očekuje
+- je li se neki kontejner restartao ili “šteka”
+
+Monitoring stack se diže zajedno s aplikacijom preko `docker-compose.yml`, tako da se sve dobije odmah nakon `docker compose up`.
+
+**Tok metrika:** `cAdvisor` → `Prometheus` → `Grafana`
 
 ---
 
-### Što je što (uloge komponenti)
+### Uloge komponenti
 
-- **cAdvisor**  
-  Skuplja metrike o Docker kontejnerima (npr. CPU/memorija/network). On je izvor podataka za kontejnere.
+**cAdvisor (Container Advisor)**  
+cAdvisor je servis koji čita podatke s Docker hosta i prati svaki kontejner. On izračuna/izvuče metrike poput CPU usage, memory usage, network RX/TX itd. i onda ih **izloži na HTTP endpointu** (najčešće `/metrics`) u formatu koji Prometheus razumije.  
+U ovom projektu cAdvisor je praktično “sensor” za kontejnere.
 
-- **Prometheus**  
-  Periodički “scrapea” metrike (uzima ih preko HTTP endpointa) i sprema ih u svoju bazu metrika.
+**Prometheus**  
+Prometheus radi po principu *pull* modela: u pravilnim intervalima (npr. svakih 5 sekundi) šalje HTTP zahtjev prema targetima i “pokupi” metrike.  
+Zatim ih sprema kao *time-series* podatke (vrijednost + timestamp), pa se može gledati povijest i trend kroz vrijeme, a ne samo stanje “sad”.
 
-- **Grafana**  
-  UI za vizualizaciju. U Grafani se kao *data source* postavi Prometheus i onda se rade dashboardi.
+**Grafana**  
+Grafana je UI sloj. Ona **ne prikuplja metrike**, nego ih čita iz Prometheusa (data source) i prikazuje kroz grafove/dashboards.  
+Grafana je korisna jer se u jednom dashboardu može usporediti više servisa (backend vs worker), gledati povijest, raditi filtre i kasnije dodati alerting.
 
 > Zašto je cAdvisor tu?  
 > Prometheus sam po sebi ne zna metrike kontejnera. Treba mu “exporter” koji te metrike izlaže. U ovom projektu cAdvisor radi tu ulogu.
+
+> Zašto Grafana ako cAdvisor već ima UI?  
+> cAdvisor UI je dobar za brzi “live” pregled i debug, ali Grafana je bolja za pregled trendova kroz vrijeme, usporedbu više metrika na jednom mjestu i izradu dashboarda (plus kasnije alerting).
 
 ---
 
@@ -494,6 +568,7 @@ scrape_configs:
       - targets: ["cadvisor:8080"]
 ```
 - ```scrape_interval: 5s``` znači da Prometheus uzima metrike svakih 5 sekundi
+  (kraći interval daje detaljnije metrike, ali povećava količinu podataka/opterećenje).
 - targeti koriste Docker hostnames (```prometheus```, ```cadvisor```) jer su svi servisi u istoj Docker mreži
 
   ---
@@ -519,7 +594,7 @@ scrape_configs:
 **Dodavanje Prometheus data source-a:**
 - URL (unutar Docker mreže): `http://prometheus:9090`
 
-Nakon toga možeš importati dashboard (ili složiti svoj) za prikaz CPU/memorije/mreže po kontejnerima.
+Nakon toga se može importati dashboard (ili složiti svoj) za prikaz CPU/memorije/mreže po kontejnerima.
 
 ---
 
@@ -533,4 +608,3 @@ MongoDB, Prometheus, Grafana i cAdvisor nemaju Dockerfile u repozitoriju jer se 
 - `gcr.io/cadvisor/cadvisor:latest`
 
 Konfiguracija se radi kroz `docker-compose.yml` (portovi, env varijable, volume mountovi) i kroz config datoteke (npr. `monitoring/prometheus.yml`).
-
