@@ -613,74 +613,6 @@ MongoDB, Prometheus, Grafana i cAdvisor nemaju Dockerfile u repozitoriju jer se 
 
 Konfiguracija se radi kroz `docker-compose.yml` (portovi, env varijable, volume mountovi) i kroz config datoteke (npr. `monitoring/prometheus.yml`).
 
-## AWS EC2 (deploy okruženje)
-
-CheckHTML je deployan na **AWS EC2 instancu** (udaljeni Linux poslužitelj) kako bi se aplikacija mogla pokretati neovisno o lokalnom računalu. Isti `docker-compose.yml` koristi se lokalno i na serveru, što osigurava identičan način pokretanja i jednostavan deployment.
-
----
-
-## Povezivanje na server (SSH)
-
-Pristup EC2 instanci ide preko **SSH-a**. Tipični workflow je spajanje na server, dohvat koda preko Git-a i pokretanje Docker Compose stacka.
-
-Primjer spajanja pomoću SSH ključa:
-
-```bash
-ssh -i /path/to/key.pem ubuntu@EC2_PUBLIC_IP
-```
-
-Na serveru je preporučljivo provjeriti dostupnost osnovnih alata prije pokretanja sustava:
-
-```bash
-docker --version
-docker compose version
-git --version
-```
-
-## Pristup aplikaciji
-
-Ako su portovi otvoreni u **Security Group** postavkama, servisi su dostupni direktno preko javne IP adrese EC2 instance:
-
-- **Frontend:** `http://EC2_PUBLIC_IP:8080`
-- **Backend API:** `http://EC2_PUBLIC_IP:3000`
-- **Grafana:** `http://EC2_PUBLIC_IP:3001`
-- **Prometheus:** `http://EC2_PUBLIC_IP:9090`
-- **cAdvisor:** `http://EC2_PUBLIC_IP:8081`
-
-Ako portovi nisu otvoreni ili se želi sigurniji pristup, koristi se SSH tuneliranje kojim se svi potrebni portovi mapiraju u jednoj naredbi:
-
-```bash
-ssh -N -L 8080:localhost:8080 -L 3000:localhost:3000 -L 3001:localhost:3001 -L 9090:localhost:9090 -L 8081:localhost:8081 USERNAME@EC2_PUBLIC_IP
-```
-
-## Deployment na EC2
-
-Kod se prvo dohvaća s repozitorija pomoću:
-
-```bash
-git clone <REPO_URL>
-cd checkHTMLapp
-```
-
-Naknadne promjene povlače se pomoću:
-
-```bash
-git pull
-```
-
-Cijeli sustav se zatim gradi i pokreće jednom naredbom:
-
-```bash
-docker compose up -d --build
-```
-
-Opcija `--build` osigurava da se servisi iz vlastitog koda ponovno izgrade, dok `-d` pokreće kontejnere u pozadini. Stanje sustava i logovi mogu se provjeriti pomoću:
-
-```bash
-docker ps
-docker compose logs -f
-```
-
 ## CI/CD – Continuous Delivery
 
 U sklopu projekta implementiran je **CI/CD pipeline** s ciljem automatizacije procesa izgradnje aplikacije i njene pripreme za pokretanje u produkcijskom okruženju.  
@@ -743,7 +675,6 @@ Aplikacija je deployana na **AWS EC2 virtualni server**, čime je osigurano real
 
 Osnovna ideja deploymenta je da:
 
-- server **ne sadrži izvorni kod aplikacije**
 - server koristi isključivo **gotove Docker image-e** iz GHCR-a
 - build procesa nema na serveru
 
@@ -785,6 +716,26 @@ Ovakav pristup omogućuje brz i pouzdan deployment bez potrebe za buildanjem apl
 
 ---
 
+## Povezivanje na server (SSH)
+
+Pristup EC2 instanci ide preko **SSH-a**. Tipični workflow je spajanje na server, dohvat koda preko Git-a i pokretanje Docker Compose stacka.
+
+Primjer spajanja pomoću SSH ključa:
+
+```bash
+ssh -i /path/to/key.pem ec2-user@EC2_PUBLIC_IP
+```
+
+Na serveru je preporučljivo provjeriti dostupnost osnovnih alata prije pokretanja sustava:
+
+```bash
+docker --version
+docker compose version
+git --version
+```
+
+---
+
 ## Postupak deploya na server
 
 Na AWS EC2 serveru deployment se provodi sljedećim koracima:
@@ -801,56 +752,26 @@ Ako dođe do nove verzije aplikacije:
 - CI pipeline automatski izgradi i objavi nove image-e
 - server povuče nove image-e i restartira kontejnere
 
-Javni URL-ovi aplikacije i monitoringa
-
-Svi servisi koriste istu javnu IP adresu EC2 instance (`EC2_PUBLIC_IP`), to jest 63.179.145.215, ali različite portove.
-
-#### Frontend (Vue + Nginx)
-
-```text
-http://63.179.145.215:8080
-```
-
 ---
 
-#### Backend (REST API)
+## Pristup aplikaciji
 
-```text
-http://63.179.145.215:3000
-```
+Ako su portovi otvoreni u **Security Group** postavkama, servisi su dostupni direktno preko javne IP adrese EC2 instance (u našem slučaju 63.179.145.215):
 
----
+- **Frontend:** `http://63.179.145.215:8080`
+- **Backend API:** `http://63.179.145.215:3000`
+- **Grafana:** `http://63.179.145.215:3001`
+- **Prometheus:** `http://63.179.145.215P:9090`
+- **cAdvisor:** `http://63.179.145.215:8081`
 
-### Monitoring servisi
-
-#### Prometheus
-
-```text
-http://63.179.145.215:9090
-```
-
----
-
-#### cAdvisor
-
-```text
-http://63.179.145.215:8081
-```
-
----
-
-#### Grafana
-
-```text
-http://63.179.145.215:3001
-```
+````
 
 **Default login podaci:**
 
 ```text
 Username: admin
 Password: admin123
-```
+````
 
 ---
 
