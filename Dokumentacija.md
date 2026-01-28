@@ -743,8 +743,8 @@ Na AWS EC2 serveru deployment se provodi sljedećim koracima:
 1. Instalacija Dockera i Docker Compose-a
 2. Povlačenje najnovijih image-a i pokretanje aplikacije:
    ```bash
-   docker compose -f docker-compose.server.yml pull
-   docker compose -f docker-compose.server.yml up -d
+   docker-compose -f docker-compose.server.yml pull
+   docker-compose -f docker-compose.server.yml up -d
    ```
 
 Ako dođe do nove verzije aplikacije:
@@ -758,11 +758,11 @@ Ako dođe do nove verzije aplikacije:
 
 Ako su portovi otvoreni u **Security Group** postavkama, servisi su dostupni direktno preko javne IP adrese EC2 instance (u našem slučaju 63.179.145.215):
 
-- **Frontend:** `http://63.179.145.215:8080`
-- **Backend API:** `http://63.179.145.215:3000`
-- **Grafana:** `http://63.179.145.215:3001`
-- **Prometheus:** `http://63.179.145.215P:9090`
-- **cAdvisor:** `http://63.179.145.215:8081`
+- **Frontend:** `http://3.122.195.84:8080`
+- **Backend API:** `http://3.122.195.84:3000`
+- **Grafana:** `http://3.122.195.84:3001`
+- **Prometheus:** `http://3.122.195.84:9090`
+- **cAdvisor:** `http://3.122.195.84:8081`
 
 ````
 
