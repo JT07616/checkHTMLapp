@@ -758,11 +758,11 @@ Ako dođe do nove verzije aplikacije:
 
 Ako su portovi otvoreni u **Security Group** postavkama, servisi su dostupni direktno preko javne IP adrese EC2 instance (u našem slučaju 63.179.145.215):
 
-- **Frontend:** `http://3.122.195.84:8080`
-- **Backend API:** `http://3.122.195.84:3000`
-- **Grafana:** `http://3.122.195.84:3001`
-- **Prometheus:** `http://3.122.195.84:9090`
-- **cAdvisor:** `http://3.122.195.84:8081`
+- **Frontend:** `http://<EC2_PUBLIC_IP>:8080`
+- **Backend API:** `http://<EC2_PUBLIC_IP>:3000`
+- **Grafana:** `http://<EC2_PUBLIC_IP>:3001`
+- **Prometheus:** `http://<3EC2_PUBLIC_IP>:9090`
+- **cAdvisor:** `http://<EC2_PUBLIC_IP>:8081`
 
 ````
 
