@@ -1,4 +1,4 @@
-# CheckHTML - Repozitorij iz kolegija Praktikum DevOps (FIPU)
+# CheckHTML - Repozitorij projekta iz kolegija Praktikum DevOps (FIPU)
 
 ## Preduvjeti
 
@@ -43,10 +43,14 @@ docker compose up --build
 
 ---
 
-## Pristup aplikaciji
+## Pristup servisima:
 
 - Frontend: http://localhost:8080
 - Backend API: http://localhost:3000
+- Grafana: http://localhost:3001  (user: `admin` | pass:`admin123`)
+- Prometheus: http://localhost:9090
+- cAdvisor: http://localhost:8081
+
 
 ---
 
@@ -56,8 +60,11 @@ docker compose up --build
 docker compose down
 ```
 
-Brisanje i volumena baze:
+Brisanje volumena (potpuni reset podataka):
 
 ```
 docker compose down -v
 ```
+## Dokumentacija
+
+Detaljna tehnička dokumentacija projekta (backend, worker, baza, Docker, monitoring i CI/CD) nalazi se unutar repozitorija u zasebnom dokumentu.
