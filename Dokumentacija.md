@@ -792,3 +792,9 @@ U ovom projektu implementiran je **Continuous Delivery**, a ne Continuous Deploy
 - postoji potpuna kontrola nad trenutkom deploya
 
 Ovakav pristup smanjuje rizik i često se koristi u stvarnim DevOps okruženjima.
+
+---
+
+## Demo video aplikacije
+
+[[CheckHTML – demo](https://www.youtube.com/watch?v=gG6IPpVO31M)](https://www.youtube.com/watch?v=gG6IPpVO31M)
