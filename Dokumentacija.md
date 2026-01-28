@@ -63,7 +63,7 @@ subgraph S["Server (AWS EC2)
 
   subgraph APP["Application services"]
     direction LR
-    U["User / Browser"] -->|"HTTP 8080"| FE["Frontend (Vue + Nginx)"]
+    U["User / Browser"] -->|"HTTP 8080"| FE["Frontend (Vue)"]
     FE -->|"REST API"| BE["Backend (Node.js/Express)"]
     BE -->|"MongoDB"| DB[("MongoDB")]
     W["Worker (Node.js)"] -->|"MongoDB"| DB
