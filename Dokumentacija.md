@@ -797,4 +797,4 @@ Ovakav pristup smanjuje rizik i često se koristi u stvarnim DevOps okruženjima
 
 ## Demo video aplikacije
 
-[[CheckHTML – demo](https://www.youtube.com/watch?v=gG6IPpVO31M)](https://www.youtube.com/watch?v=gG6IPpVO31M)
+https://www.youtube.com/watch?v=gG6IPpVO31M
