@@ -53,7 +53,7 @@ flowchart TB
 %% --- CI/CD ---
 subgraph CICD["CI/CD"]
   REPO["GitHub Repo"] -->|"push"| GA["GitHub Actions"]
-  GA -->|"SSH deploy: git pull + docker compose up -d"| S
+  GA -->|"Build & push images to GHCR"| S
 end
 
 %% --- Server + Docker stack ---
