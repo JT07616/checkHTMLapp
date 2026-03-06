@@ -65,6 +65,4 @@ Brisanje volumena (potpuni reset podataka):
 ```
 docker compose down -v
 ```
-## Dokumentacija
 
-Detaljna tehnička dokumentacija projekta (backend, worker, baza, Docker, monitoring i CI/CD) nalazi se unutar repozitorija u zasebnom dokumentu.
